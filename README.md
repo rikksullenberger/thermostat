@@ -3,6 +3,9 @@ This project configures an ESPHome-based thermostat and HVAC controller using th
 
 Note: This configuration requires ESPHome version 2025.4.0 or newer. It may work on earlier versions, but it is untested.
 
+The information on the Waveshare ESP32-S3-Relay-6CH board can be found at : https://www.waveshare.com/wiki/ESP32-S3-Relay-6CH
+It can be found on Amazon for a decent price, Or Waveshare directly.
+
 🚀 Features
 🌡️ Dual-point thermostat with heat/cool mode
 
