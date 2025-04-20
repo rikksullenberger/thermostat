@@ -1,0 +1,334 @@
+####################################################
+##### This is the substitutions section        #####
+##### Change to match your needs               #####
+####################################################
+substitutions:
+  name: "esphome-hvac-dev"
+  friendly_name: HVAC-DEV
+  static_ip: 192.168.30.240
+  gateway: 192.168.30.1
+  subnet: 255.255.255.0
+###################################################
+# This is the main configuration file for ESPHome #
+# It is used to configure the ESPHome device      #
+###################################################
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2025.4.0
+  name_add_mac_suffix: false
+  platformio_options:
+    board_build.flash_mode: dio
+  project:
+    name: "HVAC.DEV"
+    version: "0.1.2"
+
+##### Board setup for compiler #####
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  baud_rate: 921600
+
+##### Wifi Setup - should be able to enter settings in #####
+##### the substitution area at the top of this file.   #####
+wifi:
+  ssid: !secret wifi_ssid # Password is pulled from the secrets file in esphome
+  password: !secret wifi_password # Password is pulled from the secrets file in esphome
+  manual_ip:
+    static_ip: ${static_ip} 
+    gateway: ${gateway}
+    subnet: ${subnet}  
+##### Fallback hotspot #####  
+  ap:
+    ssid: "${friendly_name} Fallback Hotspot"
+    password: fall_back_password
+
+# Enable Home Assistant API
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_encryption_key # Password is pulled from the secrets file in esphome
+
+# Allow Over-The-Air updates
+ota:
+- platform: esphome
+
+# Allow provisioning Wi-Fi via serial
+improv_serial:
+
+
+# In combination with the `ap` this allows the user
+# to provision wifi credentials to the device via WiFi AP.
+captive_portal:
+
+dashboard_import:
+  package_import_url: github://esphome/example-configs/esphome-web/esp32.yaml@main
+  import_full_config: true
+
+
+# Setup time zones from Home Assistant
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+# Sets up Bluetooth LE (Only on ESP32) to allow the user
+# to provision wifi credentials to the device.
+esp32_improv:
+  authorizer: none
+
+# To have a "next url" for improv serial
+web_server:
+
+#### This is the sensor section ########################################
+# This section is used to configure the sensors for the ESPHome device #
+########################################################################
+
+# Reference the temperature sensor from Home Assistant (living room sensor)
+# used for temperature and humidity for the thermostat
+sensor:
+  - platform: homeassistant
+    id: temperature_sensor
+    name: "Temperature Sensor from Living Room"
+    entity_id: sensor.livingroom_air_monitor_temperature
+    unit_of_measurement: °F
+    filters:
+      - lambda: return (x - 32.0) * 5.0 / 9.0;  # Fahrenheit to Celsius conversion, if needed
+
+  # Add humidity sensor from Home Assistant
+  - platform: homeassistant
+    id: humidity_sensor
+    name: "Living Room Humidity Sensor"
+    entity_id: sensor.livingroom_air_monitor_humidity
+    unit_of_measurement: "%"
+    
+  # WiFi Signal Strength
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: diagnostic
+
+  # Reports the WiFi signal strength in %
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Strength"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: status
+    name: "Status"
+
+  - platform: gpio
+    name: "Boot Button"
+    pin:
+      number: 0
+      ignore_strapping_warning: true
+      mode:
+        input: true
+      inverted: true
+    disabled_by_default: true
+
+# Connection diagnostics information displays on device web interface 
+# and available to Home Assistant
+text_sensor:
+  - platform: version
+    name: "Firmware Version"
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
+    mac_address:
+      name: "Mac Address"
+      entity_category: diagnostic
+
+# Led indicator light
+light:
+   - platform: neopixelbus
+     type: RGB
+     variant: 800KBPS
+     pin: GPIO38
+     num_leds: 1
+     name: "HVAC Status LED"
+     id: hvac_status_led
+
+# Relay interface settings
+switch:
+  # Relay 1
+  - platform: gpio
+    pin: GPIO1
+    id: G
+    name: "Fan"
+  # Relay 2
+  - platform: gpio
+    pin: GPIO2
+    id: W1
+    name: "Low Heat"
+  # Relay 3
+  - platform: gpio
+    pin: GPIO41
+    id: W2
+    name: "High Heat"
+  # Relay 4
+  - platform: gpio
+    pin: GPIO42
+    id: Y1
+    name: "Cool"
+  # Relay 5  (Not currently in use for this application)
+  - platform: gpio
+    pin:
+      number: GPIO45
+      ignore_strapping_warning: true
+    id: relay5
+    name: Relay 5
+  # Relay 6  (Not currently in use for this application)
+  - platform: gpio
+    pin:
+      number: GPIO46
+      ignore_strapping_warning: true
+    id: relay6
+    name: Relay 6
+
+# Reset button on device
+  - platform: restart
+    name: "Restart"
+    id: restart_button
+    entity_category: config
+
+# Disabled, this wipes the device - Device would have to be reloaded from scratch
+# It's here but disabled for safety. Enable at your own risk!!
+#  - platform: factory_reset
+#    name: "Factory Reset"
+#    id: reset
+#    entity_category: config
+
+# Force "safe mode"
+  - platform: safe_mode
+    name: "Safe Mode"
+    internal: false
+    entity_category: config
+
+# Dual-point Climate Controller 
+climate:
+  - platform: thermostat
+    name: "Thermostat Climate Controller"
+    sensor: temperature_sensor  # Reference the Home Assistant sensor ID here
+    humidity_sensor: humidity_sensor # Reference the Home Assistant humidity sensor ID here
+# Added 04-20-25 change the the temp setting steps to 1/2 degree
+    visual:
+      min_temperature: 10    # Lowest temp 50 F
+      max_temperature: 29.44444   #Highest temp 85 F
+      temperature_step:
+        target_temperature: 0.5  # Temp setting steps 1/2 degree F
+        current_temperature: 0.1  # Temp display steps .1 degree F
+
+# Hysteresis settings. Sets up how far above and below cooling/heating will go above/below setpoint
+# Sets up minimum/maximum run times. This important to keep from over working the system. It is not recomended 
+# to set any of the values to 0. min_idle_time forces the system to wait for the set smount of time to protect from 
+# quick cycling. Times are in seconds
+    cool_deadband: 0 °F # How far below the set point before cooling starts
+    cool_overrun: 2 °F #How far above the setpoint before cooling ends
+    heat_deadband: 1 °F # How far below the set point before heating starts
+    heat_overrun: 1.5 °F # How far above the set point before heating ends
+    min_cooling_off_time: 300s
+    min_cooling_run_time: 300s
+    min_heating_off_time: 300s
+    min_heating_run_time: 300s
+    min_fanning_off_time: 120s
+    min_fanning_run_time: 300s
+    min_idle_time: 300s
+    set_point_minimum_differential: 4 °F # The number of degrees between the heat and cool. (Be careful here!)
+
+# Actions called for heating/cooling What relays turn on/off for what.
+# What color to set the indicaator to.
+    fan_only_action: 
+      - switch.turn_on: G
+      - switch.turn_off: W1
+      - switch.turn_off: W2
+      - switch.turn_off: Y1
+      - light.turn_on:        
+          id: hvac_status_led
+          red: 0
+          green: 80%
+          blue: 0
+
+    cool_action:
+      - switch.turn_on: Y1
+      - switch.turn_on: G
+      - switch.turn_off: W2
+      - switch.turn_off: W1
+      - light.turn_on:
+          id: hvac_status_led
+          red: 0
+          green: 0
+          blue: 80% 
+
+    heat_action:
+      - switch.turn_on: W1
+      - switch.turn_off: W2
+      - switch.turn_on: G
+      - switch.turn_off: Y1
+      - light.turn_on:
+          id: hvac_status_led
+          red: 80%
+          green: 0
+          blue: 0
+    max_heating_run_time: 300s
+
+    supplemental_heating_delta: 4 °F  # This sets where low heat ends and high heat begins. 
+    supplemental_heating_action: 
+      - switch.turn_on: W2
+      - switch.turn_off: Y1
+      - switch.turn_on: G
+      - light.turn_on:
+          id: hvac_status_led
+          red: 80%
+          green: 40%
+          blue: 0
+
+    idle_action:
+      - switch.turn_off: G
+      - switch.turn_off: W1
+      - switch.turn_off: W2
+      - switch.turn_off: Y1
+      - light.turn_off:
+          id: hvac_status_led
+# Sets default preset, restores previous operating mode from flash. 
+    default_preset: Home
+    on_boot_restore_from: memory
+# Temperature and mode presets are setup here.
+    preset:
+      - name: Home
+        default_target_temperature_low: 64 °F
+        default_target_temperature_high: 70 °F
+        mode: HEAT_COOL
+      - name: Comfort
+        default_target_temperature_low: 66 °F
+        default_target_temperature_high: 68 °F
+        mode: HEAT_COOL
+      - name: Sleep
+        default_target_temperature_low: 63 °F
+        default_target_temperature_high: 68 °F
+        mode: HEAT_COOL
+      - name: Away
+        default_target_temperature_low: 55 °F
+        default_target_temperature_high: 78 °F
+        mode: HEAT_COOL
+      - name: OverCool
+        default_target_temperature_high: 66 °F
+        default_target_temperature_low: 69 °F
+        mode: COOL
+      - name: Warm up
+        default_target_temperature_high: 70 °F
+        default_target_temperature_low: 68 °F
+        mode: HEAT
+    
