@@ -96,7 +96,7 @@ Integrate into Home Assistant via the ESPHome integration.
 Adjust the climate entity settings in Home Assistant as needed.
 
 📚 Credits
-YAML maintained and tested by [Your Name or Handle]
+YAML maintained and tested by Rikk
 
 Hardware by Waveshare
 
